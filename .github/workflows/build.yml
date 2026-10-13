@@ -1,0 +1,53 @@
+name: Build Android APK from ZIP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Unzip and build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          set -e
+          ZIP=$(ls *.zip 2>/dev/null | head -n 1)
+          if [ -z "$ZIP" ]; then echo "No .zip file found in repository root"; exit 1; fi
+          echo "Using $ZIP"
+          rm -rf _tmp project
+          unzip -q "$ZIP" -d _tmp
+          # لو الملفات داخل مجلد واحد نستخدمه، وإلا نستخدم الجذر
+          if [ "$(ls -A _tmp | wc -l)" -eq 1 ] && [ -d "_tmp/$(ls _tmp)" ]; then
+            mv "_tmp/$(ls _tmp)" project
+          else
+            mv _tmp project
+          fi
+          test -f project/settings.gradle || { echo "settings.gradle missing - wrong zip?"; exit 1; }
+          ls project
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Build debug APK
+        working-directory: project
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Manara-APK
+          path: project/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
