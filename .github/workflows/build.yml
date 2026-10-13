@@ -16,18 +16,29 @@ jobs:
       - name: Unzip project
         run: |
           set -e
-          ZIP=$(ls *.zip 2>/dev/null | head -n 1)
-          if [ -z "$ZIP" ]; then echo "No .zip file found in repository root"; exit 1; fi
-          echo "Using $ZIP"
           rm -rf _tmp project
-          unzip -q "$ZIP" -d _tmp
+          FOUND=""
+          # نبحث بين كل ملفات zip عن مشروع الأندرويد (الذي فيه settings.gradle)
+          for ZIP in *.zip; do
+            [ -f "$ZIP" ] || continue
+            if unzip -Z1 "$ZIP" | grep -qE '(^|/)settings\.gradle$'; then
+              FOUND="$ZIP"; break
+            fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "No Android project zip found (a zip containing settings.gradle)."
+            echo "Zip files in repo:"; ls -1 *.zip 2>/dev/null || echo "(none)"
+            exit 1
+          fi
+          echo "Using $FOUND"
+          unzip -q "$FOUND" -d _tmp
           # لو الملفات داخل مجلد واحد نستخدمه، وإلا نستخدم الجذر
           if [ "$(ls -A _tmp | wc -l)" -eq 1 ] && [ -d "_tmp/$(ls _tmp)" ]; then
             mv "_tmp/$(ls _tmp)" project
           else
             mv _tmp project
           fi
-          test -f project/settings.gradle || { echo "settings.gradle missing - wrong zip?"; exit 1; }
+          test -f project/settings.gradle
           ls project
 
       - name: Setup JDK 17
